@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+            color: #333;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: row;
+        }
+        #content-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        h2 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            display: column;
+        }
+    
+        h3 {
+            margin-bottom: 20px;
+        }
+    
+        div {
+            margin-bottom: 10px;
+        }
+    
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    
+        input {
+            width: 200px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            background: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: box-shadow 0.3s ease-in-out;
+        }
+    
+        input:focus {
+            outline: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+    
+        button {
+            padding: 8px 12px;
+            border: none;
+            background: #007BFF;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        }
+    
+        button:hover {
+            background: #0056b3;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        #logo-container {
+            display: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        #app-logo {
+            width: 150px;
+            height: auto;
+        }
+    
+        #idle-info {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #login-section {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    
+        #login-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+    
+        #idle-info {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="logo-container">
+        <img src="logo.png" alt="Steam Idler Logo" id="app-logo">
+    </div>
+    <div id="content-container">
+    <h2>Steam Idler</h2>
+    <div id="login-section">
+        <div>
+            <label for="username">Username:</label>
+            <input type="text" id="username">
+        </div>
+        <div>
+            <label for="password">Password:</label>
+            <input type="password" id="password">
+        </div>
+        <div>
+            <label for="gameId">Game ID:</label>
+            <input type="text" id="gameId">
+        </div>
+        <button onclick="startIdling()">Start Idling</button>
+    </div>
+
+    <div id="idle-info">
+        <h3>Currently Idling: <span id="current-game"></span></h3>
+        <p>Time elapsed: <span id="time-elapsed">00:00:00</span></p>
+        <button onclick="stopIdling()">Stop Idling</button>
+    </div>
+</div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        let idleStartTime;
+        let idleInterval;
+
+        async function getGameNameFromSteam(gameId) {
+            try {
+                const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${gameId}`);
+                const data = await response.json();
+                if (data[gameId].success) {
+                    return data[gameId].data.name;
+                } else {
+                    console.error("Couldn't retrieve game details:", data[gameId]);
+                    return null;
+                }
+            } catch (error) {
+                console.error("Error fetching from Steam API:", error);
+                return null;
+            }
+        }
+        function startIdling() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const gameId = document.getElementById('gameId').value;
+            const logoElem = document.getElementById('app-logo');
+            logoElem.src = 'working.gif';
+            
+            console.log('Sending IPC message with:', username, password, gameId);
+    
+            ipcRenderer.send('start-idling', { username, password, gameId });
+    
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('idle-info').style.display = 'block';
+            getGameNameFromSteam(gameId).then(gameName => {
+                if (gameName) {
+                    document.getElementById('current-game').innerText = gameName;
+                } else {
+                    document.getElementById('current-game').innerText = "Unknown Game";
+                }
+            });
+            idleStartTime = Date.now();
+            idleInterval = setInterval(updateIdleTime, 1000);
+        }
+    
+        function updateIdleTime() {
+            const elapsed = Date.now() - idleStartTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+    
+            const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('time-elapsed').innerText = formattedTime;
+        }
+    
+        function stopIdling() {
+            clearInterval(idleInterval);
+            ipcRenderer.send('stop-idling');
+            console.log('Sent stop-idling message');
+            document.getElementById('idle-info').style.display = 'none';
+            document.getElementById('login-section').style.display = 'block';
+            const logoElem = document.getElementById('app-logo');
+            logoElem.src = 'logo.png';
+        }
+    </script>
+    
+</body>
+
+</html>
